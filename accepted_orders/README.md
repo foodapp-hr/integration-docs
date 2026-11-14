@@ -1,6 +1,6 @@
 # FoodApp Partner API — Accepted Orders v2 i Fetch Menu
 
-**Verzija dokumenta:** 1.2 (2026-11-14): kodovi razloga odbijanja (§4.2), ID-jevi jela (§7, §9)
+**Verzija dokumenta:** 1.3 (2026-11-14): §5 usklađen sa stvarnim v2 payloadom (`fulfill_at`, stavke, `tax_list`); kodovi razloga (§4.2); ID-jevi jela (§7, §9)
 **Kompatibilnost:** GloriaFood Accepted Orders API v2 + Fetch Menu API v2
 **Namjena:** partnerski sustavi (call centar, POS, ERP) koji zaprimaju online narudžbe restorana s FoodApp platforme
 **Status:** u pripremi — specifikacija je konačna, endpointi se puštaju u rad po dogovoru s partnerom. Pristup dobiva partner po restoranu, uz ključeve koje izdaje FoodApp.
@@ -131,7 +131,7 @@ Content-Type: application/json
 - Za zakazane narudžbe (`for_later: true`) šaljete prazno tijelo `{}`. Vrijeme je ono koje je kupac izabrao.
 
 ```json
-{ "id": 100245, "status": "accepted", "accepted_at": "2026-11-13T14:41:09.000Z", "fulfill_time": "2026-11-13T15:16:09.000Z" }
+{ "id": 100245, "status": "accepted", "accepted_at": "2026-11-13T14:41:09.000Z", "fulfill_at": "2026-11-13T15:16:09.000Z" }
 ```
 
 **Odbijanje**
@@ -164,7 +164,7 @@ Authorization: <order API key>
 ```
 
 ```json
-{ "id": 100245, "status": "accepted", "accepted_at": "…", "rejected_at": null, "fulfill_time": "…", "updated_at": "…" }
+{ "id": 100245, "status": "accepted", "accepted_at": "…", "rejected_at": null, "fulfill_at": "…", "updated_at": "…" }
 ```
 
 **Pravila**
@@ -192,80 +192,85 @@ Tijelo greške: `{ "code": "ORDER_NOT_PENDING", "message": "…", "status": "tim
 
 ## 5. Narudžba — polja
 
-Vrijednosti novca su `number` s dvije decimale, valuta `EUR`, porez **uključen u cijenu** (`GROSS`). Vremena su ISO 8601 u **UTC**, s nulom milisekundi: `2026-11-08T17:41:09.000Z`.
+Oblik je GloriaFood Accepted Orders v2. Novac je `number` s najviše dvije decimale, valuta `EUR`, porez je **uključen u cijenu** (`GROSS`). Vremena su ISO 8601 u **UTC** (`2026-11-08T17:41:09.000Z`).
 
 ### 5.1 Narudžba
 
 | Polje | Tip | Opis |
 |---|---|---|
-| `id` | integer | jedinstveni broj narudžbe na FoodAppu (isti broj vidi kupac) — ključ deduplikacije |
+| `id` | integer | broj narudžbe na FoodAppu (isti broj vidi kupac); ključ deduplikacije |
 | `api_version` | integer | uvijek `2` |
+| `pos_system_id` | integer | identifikator FoodAppa kao izvora |
 | `type` | string | `delivery` ili `pickup` |
 | `status` | string | vidi §4 |
-| `restaurant_id` | integer | FoodApp ID restorana |
-| `restaurant_name` | string | |
-| `restaurant_key` | string | restaurant key (§2) |
-| `restaurant_token` | string | vaš ID restorana (§2) |
-| `restaurant_street`, `restaurant_city`, `restaurant_zipcode`, `restaurant_country`, `restaurant_phone` | string | adresa i telefon restorana |
+| `source` | string | `website` |
+| `payment` | string | `CASH` (gotovina), `CARD` (kartica pri preuzimanju/dostavi), `ONLINE` (plaćeno online) |
+| `used_payment_methods` | array | `[payment]` |
+| `gateway_type` | string \| null | za `ONLINE`: pružatelj plaćanja; inače `null` |
+| `gateway_transaction_id` | string \| null | za `ONLINE`: ID transakcije kod pružatelja; inače `null` |
+| `accepted_at` | string | kada je narudžba prihvaćena |
+| `fulfill_at` | string | kada narudžba mora biti isporučena (dostava) ili spremna (preuzimanje) |
+| `updated_at` | string | zadnja promjena stanja |
+| `for_later` | boolean | `true` = zakazana narudžba (kupac je izabrao termin) |
+| `instructions` | string \| null | napomena kupca za narudžbu |
+| `restaurant_id` | integer | ID restorana (§9) |
+| `restaurant_name`, `restaurant_phone` | string | |
+| `restaurant_street`, `restaurant_city`, `restaurant_zipcode` | string | adresa restorana |
+| `restaurant_country` | string | `HR` |
+| `restaurant_state` | string | prazno |
 | `restaurant_latitude`, `restaurant_longitude` | string | |
 | `restaurant_timezone` | string | `Europe/Zagreb` |
+| `restaurant_key` | string | restaurant key (§2) |
+| `restaurant_token` | string | vaš ID restorana (§2) |
 | `currency` | string | `EUR` |
 | `client_first_name`, `client_last_name` | string | ime i prezime kupca (zasebno) |
-| `client_email`, `client_phone` | string | telefon u E.164 obliku (`+385...`) |
-| `client_address` | string | puna adresa; prazno za `pickup` |
-| `client_address_parts` | object | `street`, `bloc`, `floor`, `apartment`, `intercom`, `more_address`, `zipcode`, `city`, `full_address` |
+| `client_email`, `client_phone` | string | |
+| `client_marketing_consent` | boolean | privola kupca za marketing |
+| `client_address` | string \| null | puna adresa; `null` za `pickup` |
+| `client_address_parts` | object \| null | `street`, `city`, opcionalno `zipcode`, `more_address` (napomena za dostavu: kat, interfon…); `null` za `pickup` |
 | `latitude`, `longitude` | string \| null | lokacija dostave; `null` za `pickup` |
-| `instructions` | string \| null | napomena kupca za narudžbu |
-| `payment` | string | `CASH` (gotovina), `CARD` (kartica pri preuzimanju/dostavi), `ONLINE` (plaćeno online) |
-| `gateway_type` | string \| null | za `ONLINE`: pružatelj plaćanja |
-| `gateway_transaction_id` | string \| null | za `ONLINE`: ID transakcije kod pružatelja |
-| `for_later` | boolean | `true` = zakazana narudžba (kupac je izabrao termin) |
-| `fulfill_time` | string | kada narudžba mora biti gotova / isporučena (UTC) |
-| `accepted_at` | string \| null | kada je prihvaćena (UTC) |
-| `updated_at` | string | zadnja promjena (UTC) — za redoslijed statusa |
-| `total_price` | number | ukupno za naplatu (sve uključeno) |
-| `sub_total_price` | number | zbroj stavki tipa `item`, bez dostave i napojnice |
+| `outside_delivery_area` | boolean \| null | `true` kad je restoran prihvatio dostavu izvan zona |
+| `total_price` | number | ukupno za naplatu, sve uključeno |
+| `sub_total_price` | number | zbroj stavki tipa `item`, bez dostave |
 | `tax_type` | string | `GROSS` |
 | `tax_name` | string | `PDV` |
 | `tax_value` | number | ukupni porez sadržan u `total_price` |
-| `tax_list` | array | razrada poreza: `{ "type", "value", "rate" }` |
-| `coupons` | array | ID-jevi primijenjenih promocija |
-| `items` | array | stavke (§5.2) — **sve što utječe na cijenu je stavka** |
+| `tax_list` | array | razrada poreza po stopi: `{ "type": "item" \| "delivery_fee", "value", "rate" }` |
+| `coupons` | array | primijenjene promocije |
+| `items` | array | stavke (§5.2); **sve što utječe na cijenu je stavka** |
+
+Ostala GF v2 polja (`persons`, `client_id`, `client_order_count`, `table_number`, `ready`, `client_language`, `billing_details`, `reference`, `delivery_zone_name` i druga) postoje radi kompatibilnosti s fiksnim vrijednostima ili `null`. Ne oslanjajte se na njih.
 
 ### 5.2 Stavka (`items[]`)
 
-GF model „sve je stavka": dostava, napojnica i popusti dolaze kao stavke posebnog tipa.
-
 | Polje | Tip | Opis |
 |---|---|---|
-| `id` | integer | ID stavke unutar narudžbe |
-| `name` | string | naziv jela / stavke |
-| `type` | string | `item`, `delivery_fee`, `tip`, `promo_cart`, `promo_item` |
-| `type_id` | integer \| null | za `item`: **ID jela iz Fetch Menu** (`item.id`); `null` za `delivery_fee` i `tip` |
-| `parent_id` | integer \| null | za jela unutar `promo_item` paketa |
-| `quantity` | integer | |
-| `price` | number | jedinična cijena bez opcija |
-| `total_item_price` | number | (`price` + zbroj opcija) × `quantity`, bez popusta |
-| `tax_type` | string | `GROSS` |
-| `tax_rate` | number | decimalno: `0.13` = 13 % |
-| `tax_value` | number | porez sadržan u `total_item_price` |
-| `discount` | number | popust na stavku |
+| `type` | string | `item` ili `delivery_fee` |
+| `type_id` | integer \| null | za `item`: ID jela iz Fetch Menu (`item.id`); `null` za `delivery_fee` i za jelo koje je u međuvremenu obrisano iz jelovnika |
+| `name` | string | naziv jela; za dostavu `DELIVERY_FEE` |
 | `instructions` | string \| null | napomena kupca za jelo |
+| `quantity` | integer | |
+| `price` | number | jedinična cijena jela (s veličinom) |
+| `total_item_price` | number | ukupno za stavku, uključujući opcije i količinu |
+| `item_discount`, `cart_discount`, `cart_discount_rate` | number | popusti (trenutno `0`) |
+| `parent_id` | integer \| null | `null` |
+| `kitchen_internal_name` | string \| null | `null` |
 | `options` | array | odabrane opcije (§5.3) |
+
+Dostava, kad se naplaćuje, dolazi kao jedna stavka `type: "delivery_fee"` i jedan redak u `tax_list` s `type: "delivery_fee"`.
 
 ### 5.3 Opcija (`items[].options[]`)
 
 | Polje | Tip | Opis |
 |---|---|---|
-| `id` | integer | |
-| `name` | string | naziv opcije (npr. „Velika", „Dodatni sir") |
-| `group_name` | string | naziv grupe (npr. „Veličina", „Prilozi") |
 | `type` | string | `size` (veličina/varijanta) ili `option` (modifikator) |
-| `type_id` | integer | ID veličine ili opcije iz Fetch Menu |
+| `type_id` | integer \| null | ID veličine ili opcije iz Fetch Menu |
+| `group_name` | string | naziv grupe; za veličinu `Veličina` |
+| `name` | string | naziv opcije (npr. „Velika", „Dodatni sir") |
+| `price` | number | jedinična cijena opcije, bez množenja s količinom stavke; za veličinu `0` (sadržana je u `price` stavke) |
 | `quantity` | integer | |
-| `price` | number | jedinična cijena opcije (**ne** pomnožena s količinom stavke) |
 
-### 5.4 Primjer (dostava, gotovina; iznosi ilustrativni)
+### 5.4 Primjer (dostava, gotovina; iznosi ilustrativni, skraćeno)
 
 ```json
 {
@@ -276,45 +281,43 @@ GF model „sve je stavka": dostava, napojnica i popusti dolaze kao stavke poseb
       "api_version": 2,
       "type": "delivery",
       "status": "accepted",
+      "source": "website",
+      "payment": "CASH",
+      "gateway_type": null,
+      "gateway_transaction_id": null,
+      "accepted_at": "2026-11-08T17:41:09.000Z",
+      "fulfill_at": "2026-11-08T18:25:00.000Z",
+      "updated_at": "2026-11-08T17:41:09.000Z",
+      "for_later": false,
+      "instructions": "Molim zvoniti dvaput",
       "restaurant_id": 1042,
       "restaurant_name": "Primjer Restoran",
-      "restaurant_key": "AbCdEfGhIjKlMnOpQr",
-      "restaurant_token": "vas-id-restorana",
-      "restaurant_street": "Ilica 1",
+      "restaurant_phone": "+38511234567",
+      "restaurant_country": "HR",
       "restaurant_city": "Zagreb",
       "restaurant_zipcode": "10000",
-      "restaurant_country": "Croatia",
-      "restaurant_phone": "+38511234567",
+      "restaurant_street": "Ilica 1",
       "restaurant_latitude": "45.8130",
       "restaurant_longitude": "15.9770",
       "restaurant_timezone": "Europe/Zagreb",
+      "restaurant_key": "AbCdEfGhIjKlMnOpQr",
+      "restaurant_token": "vas-id-restorana",
       "currency": "EUR",
       "client_first_name": "Ana",
       "client_last_name": "Horvat",
       "client_email": "ana@example.com",
       "client_phone": "+385911234567",
+      "client_marketing_consent": false,
       "client_address": "Savska cesta 10, 10000 Zagreb",
       "client_address_parts": {
         "street": "Savska cesta 10",
-        "bloc": "",
-        "floor": "3",
-        "apartment": "",
-        "intercom": "Horvat",
-        "more_address": "",
-        "zipcode": "10000",
         "city": "Zagreb",
-        "full_address": "Savska cesta 10, 10000 Zagreb"
+        "zipcode": "10000",
+        "more_address": "3. kat, interfon Horvat"
       },
       "latitude": "45.8040",
       "longitude": "15.9650",
-      "instructions": "Molim zvoniti dvaput",
-      "payment": "CASH",
-      "gateway_type": null,
-      "gateway_transaction_id": null,
-      "for_later": false,
-      "fulfill_time": "2026-11-08T18:25:00.000Z",
-      "accepted_at": "2026-11-08T17:41:09.000Z",
-      "updated_at": "2026-11-08T17:41:09.000Z",
+      "outside_delivery_area": null,
       "total_price": 29.3,
       "sub_total_price": 25.8,
       "tax_type": "GROSS",
@@ -323,66 +326,55 @@ GF model „sve je stavka": dostava, napojnica i popusti dolaze kao stavke poseb
       "tax_list": [
         { "type": "item", "value": 2.65, "rate": 0.13 },
         { "type": "item", "value": 0.56, "rate": 0.25 },
-        { "type": "delivery", "value": 0.7, "rate": 0.25 }
+        { "type": "delivery_fee", "value": 0.7, "rate": 0.25 }
       ],
       "coupons": [],
       "items": [
         {
-          "id": 501,
-          "name": "Pizza Margherita",
           "type": "item",
           "type_id": 20117,
-          "parent_id": null,
-          "quantity": 2,
-          "price": 9.5,
-          "total_item_price": 23.0,
-          "tax_type": "GROSS",
-          "tax_rate": 0.13,
-          "tax_value": 2.65,
-          "discount": 0,
+          "name": "Pizza Margherita",
           "instructions": null,
+          "quantity": 2,
+          "price": 11.5,
+          "total_item_price": 23.0,
+          "item_discount": 0,
+          "cart_discount": 0,
+          "cart_discount_rate": 0,
+          "parent_id": null,
+          "kitchen_internal_name": null,
           "options": [
-            {
-              "id": 801,
-              "name": "Velika",
-              "group_name": "Veličina",
-              "type": "size",
-              "type_id": 30051,
-              "quantity": 1,
-              "price": 2.0
-            }
+            { "type": "size", "type_id": 30051, "group_name": "Veličina", "name": "Velika", "price": 0, "quantity": 1 }
           ]
         },
         {
-          "id": 502,
-          "name": "Coca-Cola 0,5 l",
           "type": "item",
           "type_id": 20140,
-          "parent_id": null,
+          "name": "Coca-Cola 0,5 l",
+          "instructions": null,
           "quantity": 1,
           "price": 2.8,
           "total_item_price": 2.8,
-          "tax_type": "GROSS",
-          "tax_rate": 0.25,
-          "tax_value": 0.56,
-          "discount": 0,
-          "instructions": null,
+          "item_discount": 0,
+          "cart_discount": 0,
+          "cart_discount_rate": 0,
+          "parent_id": null,
+          "kitchen_internal_name": null,
           "options": []
         },
         {
-          "id": 503,
-          "name": "Dostava",
           "type": "delivery_fee",
           "type_id": null,
-          "parent_id": null,
+          "name": "DELIVERY_FEE",
+          "instructions": null,
           "quantity": 1,
           "price": 3.5,
           "total_item_price": 3.5,
-          "tax_type": "GROSS",
-          "tax_rate": 0.25,
-          "tax_value": 0.7,
-          "discount": 0,
-          "instructions": null,
+          "item_discount": 0,
+          "cart_discount": 0,
+          "cart_discount_rate": 0,
+          "parent_id": null,
+          "kitchen_internal_name": null,
           "options": []
         }
       ]
@@ -390,8 +382,6 @@ GF model „sve je stavka": dostava, napojnica i popusti dolaze kao stavke poseb
   ]
 }
 ```
-
-Narudžba može sadržavati i dodatna polja koja ovdje nisu dokumentirana (zadržana radi kompatibilnosti s GF v2). Na njih se ne oslanjajte — mogu se ukloniti bez najave.
 
 ---
 
