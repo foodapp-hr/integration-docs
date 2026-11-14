@@ -1,6 +1,6 @@
 # FoodApp Partner API — Accepted Orders v2 i Fetch Menu
 
-**Verzija dokumenta:** 1.0 (2026-11-08)
+**Verzija dokumenta:** 1.1 (2026-11-13): dodan prihvat i odbijanje preko API-ja (§4.2)
 **Kompatibilnost:** GloriaFood Accepted Orders API v2 + Fetch Menu API v2
 **Namjena:** partnerski sustavi (call centar, POS, ERP) koji zaprimaju online narudžbe restorana s FoodApp platforme
 **Status:** u pripremi — specifikacija je konačna, endpointi se puštaju u rad po dogovoru s partnerom. Pristup dobiva partner po restoranu, uz ključeve koje izdaje FoodApp.
@@ -30,6 +30,7 @@ Uz to, **Fetch Menu** daje jelovnik restorana u GF v2 obliku, s ID-jevima koji s
 | **Restaurant key** | FoodApp | polje `restaurant_key` u svakoj narudžbi; `Authorization` header za **poll** | po lokaciji restorana |
 | **Restaurant token** | **Vi** (vaš ID restorana) | polje `restaurant_token` u svakoj narudžbi — vraćamo vam vaš vlastiti ID, ne trebate mapping tablicu | po lokaciji restorana |
 | **Menu key** | FoodApp | `Authorization` header za **Fetch Menu** | po lokaciji restorana; **ne** daje pristup narudžbama |
+| **Order API key** | FoodApp | `Authorization` header za **prihvat/odbijanje preko API-ja** (§4.2) | po lokaciji restorana; samo ako je prihvat preko API-ja uključen |
 
 Ključevi se predaju isključivo zaštićenim kanalom (ne e-mailom u čistom tekstu). Rotacija na zahtjev, uz dogovoreni termin.
 
@@ -105,8 +106,87 @@ Prihvat se konfigurira po restoranu:
 
 - **Automatski prihvat** (preporučeno kad odluku donosi vaš sustav/call centar): narudžba odmah po predaji prelazi u `accepted` s unaprijed dogovorenim vremenom isporuke i odmah vam se šalje. Kupac odmah dobiva potvrdu e-poštom. Ako je narudžba plaćena karticom, iznos se tereti odmah.
 - **Prihvat u FoodApp kuhinjskoj aplikaciji**: restoran prihvaća na uređaju, upisuje vrijeme; tek tada stiže `accepted`.
+- **Prihvat preko API-ja** (proširenje FoodAppa, GF ga nema): narudžba vam stiže kao `pending`, a vaš sustav je prihvaća s vremenom isporuke ili odbija pozivom na FoodApp (§4.2). Kupac dobiva vaše stvarno vrijeme ili obavijest o odbijanju. Kartica se tereti tek na prihvat, a na odbijanje se rezervacija automatski otpušta.
 
-**API v2 nema povratni kanal** (partner → FoodApp) za prihvat, odbijanje ni promjenu vremena — isto kao GF. Ako u svom sustavu odbijete narudžbu koja vam je stigla kao `accepted`, kupca obavještavate sami (telefon), a povrat kartičnog plaćanja radi restoran/FoodApp operater. Povratni kanal (prihvat, ETA, odbijanje iz vašeg sustava) planiran je za sljedeću verziju API-ja.
+Kod automatskog prihvata nema povratnog kanala, isto kao kod GF-a. Ako odbijete narudžbu koja vam je stigla kao `accepted`, kupca obavještavate sami, a povrat kartičnog plaćanja radi restoran ili FoodApp operater. Prelazak s automatskog prihvata na prihvat preko API-ja je promjena postavke na našoj strani. Dogovaramo ga kad vaš sustav podrži §4.2.
+
+### 4.2 Prihvat i odbijanje preko API-ja
+
+Uključuje se po restoranu. Push tada obavezno uključuje status `pending`.
+
+**Autentikacija:** `Authorization: <order API key>`. To je zaseban ključ po restoranu (§2) i ne miješa se s restaurant keyem ni master keyem.
+
+**Prihvat**
+
+```http
+POST https://api.foodapp.hr/pos/order/{id}/accept
+Authorization: <order API key>
+Content-Type: application/json
+
+{ "eta_minutes": 35 }
+```
+
+- `{id}` = `id` narudžbe iz pusha.
+- `eta_minutes` (5 do 240) je za narudžbe „što prije" obavezan: za toliko minuta od prihvata narudžba mora biti isporučena (dostava) ili spremna (preuzimanje).
+- Za zakazane narudžbe (`for_later: true`) šaljete prazno tijelo `{}`. Vrijeme je ono koje je kupac izabrao.
+
+```json
+{ "id": 100245, "status": "accepted", "accepted_at": "2026-11-13T14:41:09.000Z", "fulfill_time": "2026-11-13T15:16:09.000Z" }
+```
+
+**Odbijanje**
+
+```http
+POST https://api.foodapp.hr/pos/order/{id}/reject
+Authorization: <order API key>
+Content-Type: application/json
+
+{ "reason": "busy" }
+```
+
+| `reason` | Kupac vidi |
+|---|---|
+| `none` | narudžba nije prihvaćena (bez razloga) |
+| `busy` | restoran je trenutno zauzet |
+| `couriers_busy` | svi dostavljači su zauzeti |
+| `out_of_stock` | neke stavke nisu dostupne |
+| `custom` | vaša poruka iz polja `message` (obavezno, najviše 200 znakova) |
+
+```json
+{ "id": 100245, "status": "rejected", "rejected_at": "2026-11-13T14:41:09.000Z" }
+```
+
+**Stanje narudžbe** (za usklađivanje nakon ispada ili sumnje)
+
+```http
+GET https://api.foodapp.hr/pos/order/{id}
+Authorization: <order API key>
+```
+
+```json
+{ "id": 100245, "status": "accepted", "accepted_at": "…", "rejected_at": null, "fulfill_time": "…", "updated_at": "…" }
+```
+
+**Pravila**
+
+- **Rok za odluku:** ako narudžba nije prihvaćena ni odbijena unutar približno **4 minute i 45 sekundi** od predaje, ističe (`timed_out`). Nakon 2 minute restoran može dobiti upozoravajući telefonski poziv, ako je broj postavljen.
+- **Ponavljanje je sigurno:** ponovljeni `accept` na već prihvaćenoj narudžbi vraća `200` s trenutnim stanjem i ništa ne mijenja (ni vrijeme). Isto vrijedi za ponovljeni `reject`. Kod mrežne greške slobodno ponovite isti zahtjev.
+- **Prva odluka vrijedi:** restoran može narudžbu prihvatiti i u FoodApp kuhinjskoj aplikaciji, kao rezervu kad vaš sustav ne radi. Ako je odluka već donesena (tamo ili istekom roka), vaš poziv dobiva `409` s trenutnim statusom.
+- **Potvrda pushom:** nakon vaše ili kuhinjske odluke stiže push s novim statusom (`accepted`/`rejected`/`timed_out`). Tako uvijek imate isti tok stanja bez obzira na to tko je odlučio.
+- Otkazivanje nakon prihvata i promjena vremena nakon prihvata nisu podržani u ovoj verziji. Javite se telefonom.
+
+| HTTP | `code` | Značenje |
+|---|---|---|
+| `200` | | uspjeh (i za ponovljeni zahtjev) |
+| `400` | `VALIDATION` | neispravno tijelo (npr. nedostaje `eta_minutes`, `message` za `custom`) |
+| `401` | `UNAUTHORIZED` | neispravan ili opozvan order API key |
+| `403` | `ACCEPTANCE_MODE` | za ovaj restoran prihvat preko API-ja nije uključen |
+| `404` | `ORDER_NOT_FOUND` | narudžba ne postoji ili ne pripada ovom restoranu |
+| `409` | `ORDER_NOT_PENDING` | o narudžbi je već odlučeno; tijelo sadrži trenutni `status` |
+| `429` | `RATE_LIMITED` | više od 120 zahtjeva u minuti; pričekajte `Retry-After` sekundi |
+| `5xx` | | privremena greška; ponovite, pa provjerite stanje s `GET` |
+
+Tijelo greške: `{ "code": "ORDER_NOT_PENDING", "message": "…", "status": "timed_out" }`.
 
 ---
 
@@ -387,6 +467,7 @@ Odgovor je GF Fetch Menu v2 oblik:
 | Polja `charge_to_room_*`, `company_account_id` | postoje | ne šalju se (hotelske/korporativne funkcije ne postoje) |
 | Polje `restaurant_state` | ne postoji | postoji (dodatno, može se ignorirati) |
 | Izvorišna IP adresa pusha | GF infrastruktura | `178.105.33.38` |
+| Prihvat / odbijanje iz vašeg sustava | ne postoji | opcionalno, §4.2 |
 | Poll endpoint | `pos.globalfoodsoft.com/pos/order/pop` | `api.foodapp.hr/pos/order/pop` |
 | Fetch Menu endpoint | `pos.globalfoodsoft.com/pos/menu` | `api.foodapp.hr/pos/menu` |
 
