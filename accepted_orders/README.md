@@ -1,6 +1,6 @@
 # FoodApp Partner API — Accepted Orders v2 i Fetch Menu
 
-**Verzija dokumenta:** 1.1 (2026-11-13): dodan prihvat i odbijanje preko API-ja (§4.2)
+**Verzija dokumenta:** 1.2 (2026-11-14): kodovi razloga odbijanja (§4.2), ID-jevi jela (§7, §9)
 **Kompatibilnost:** GloriaFood Accepted Orders API v2 + Fetch Menu API v2
 **Namjena:** partnerski sustavi (call centar, POS, ERP) koji zaprimaju online narudžbe restorana s FoodApp platforme
 **Status:** u pripremi — specifikacija je konačna, endpointi se puštaju u rad po dogovoru s partnerom. Pristup dobiva partner po restoranu, uz ključeve koje izdaje FoodApp.
@@ -141,15 +141,15 @@ POST https://api.foodapp.hr/pos/order/{id}/reject
 Authorization: <order API key>
 Content-Type: application/json
 
-{ "reason": "busy" }
+{ "reason": "restaurant_busy" }
 ```
 
 | `reason` | Kupac vidi |
 |---|---|
-| `none` | narudžba nije prihvaćena (bez razloga) |
-| `busy` | restoran je trenutno zauzet |
-| `couriers_busy` | svi dostavljači su zauzeti |
-| `out_of_stock` | neke stavke nisu dostupne |
+| `unspecified` | narudžba nije prihvaćena (bez razloga) |
+| `restaurant_busy` | restoran je trenutno zauzet |
+| `no_drivers` | svi dostavljači su zauzeti |
+| `items_unavailable` | neke stavke nisu dostupne |
 | `custom` | vaša poruka iz polja `message` (obavezno, najviše 200 znakova) |
 
 ```json
@@ -441,6 +441,7 @@ Odgovor je GF Fetch Menu v2 oblik:
 | Opcija | `id`, `name`, `price`, `default`, `is_out_of_stock` |
 
 - `item.id` = `items[].type_id` u narudžbi; `size.id` / `option.id` = `options[].type_id`.
+- ID-jevi su FoodApp ID-jevi, **nisu** isti kao na GloriaFoodu. Ako mapirate po ID-u, nakon prelaska ponovo dohvatite jelovnik. Mapiranje po nazivu radi bez promjena.
 - ID-jevi su **stabilni**: preimenovanje ili promjena cijene ne mijenja ID. Novo jelo dobiva novi ID; obrisano jelo nestaje iz odgovora, ali njegov ID se nikad ne dodjeljuje drugom jelu.
 - Restoran sam uređuje jelovnik. Preporuka: dohvat jednom dnevno i na zahtjev; ne češće od svakih 5 minuta.
 
@@ -463,7 +464,7 @@ Odgovor je GF Fetch Menu v2 oblik:
 | Oblik poruke, nazivi polja, tipovi | v2 | isto |
 | `id` narudžbe | GF ID | FoodApp broj narudžbe (šesteroznamenkasti, ne preklapa se s GF ID-jevima) |
 | `restaurant_id`, `restaurant_key`, `restaurant_token`, master key, menu key | GF vrijednosti | za restorane preseljene s GF-a: **iste vrijednosti** |
-| ID-jevi jela/opcija (`type_id`, menu `id`) | GF ID-jevi | za jela preseljena s GF-a: **isti GF ID-jevi**; nova jela dobivaju nove ID-jeve |
+| ID-jevi jela/opcija (`type_id`, menu `id`) | GF ID-jevi | FoodApp ID-jevi (drugi brojevi); nakon prelaska ponovo dohvatite jelovnik ili mapirajte po nazivu |
 | Polja `charge_to_room_*`, `company_account_id` | postoje | ne šalju se (hotelske/korporativne funkcije ne postoje) |
 | Polje `restaurant_state` | ne postoji | postoji (dodatno, može se ignorirati) |
 | Izvorišna IP adresa pusha | GF infrastruktura | `178.105.33.38` |
