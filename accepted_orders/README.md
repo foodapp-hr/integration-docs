@@ -72,7 +72,7 @@ Tijelo odgovora se ne čita. Odgovorite odmah nakon što narudžbu trajno spremi
 
 ### 3.3 Ponavljanje (retry)
 
-Neuspješna isporuka ponavlja se s rastućim razmakom: **1 min → 5 min → 30 min → svakih 60 min**, ukupno do **24 h** od prvog pokušaja. Nakon toga isporuka se označava neuspjelom i FoodApp operater dobiva upozorenje.
+Neuspješna isporuka ponavlja se s rastućim razmakom: **1,5 min → 3 → 6 → 12 → 24 → 48 min → …**, najviše **10 ponovnih pokušaja**, ukupno oko **24 h** od prvog pokušaja. Nakon toga isporuka se označava neuspjelom i FoodApp operater dobiva upozorenje.
 
 ### 3.4 Duplikati — obavezna zaštita na vašoj strani
 
